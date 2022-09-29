@@ -47,6 +47,7 @@ class CategoricalOptionSerializer(ModelSerializer):
 
 class QuestionSerializer(HyperlinkedModelSerializer):
     answer_type = CharField(source="get_answer_type_display", read_only=True)
+    widget = CharField(source="get_widget_display", read_only=True)
     reader_study = HyperlinkedRelatedField(
         view_name="api:reader-study-detail", read_only=True
     )
@@ -72,6 +73,10 @@ class QuestionSerializer(HyperlinkedModelSerializer):
             "interface",
             "overlay_segments",
             "look_up_table",
+            "widget",
+            "min_value",
+            "max_value",
+            "step_size",
         )
 
 

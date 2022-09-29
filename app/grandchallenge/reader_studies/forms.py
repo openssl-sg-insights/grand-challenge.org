@@ -20,7 +20,9 @@ from django.db.transaction import on_commit
 from django.forms import (
     BooleanField,
     CharField,
+    ChoiceField,
     FileField,
+    FloatField,
     Form,
     IntegerField,
     ModelChoiceField,
@@ -57,6 +59,7 @@ from grandchallenge.reader_studies.models import (
     Question,
     ReaderStudy,
     ReaderStudyPermissionRequest,
+    WidgetChoices,
 )
 from grandchallenge.reader_studies.tasks import add_file_to_display_set
 from grandchallenge.reader_studies.widgets import SelectUploadWidget
@@ -275,6 +278,14 @@ class QuestionForm(SaveFormInitMixin, DynamicFormMixin, ModelForm):
                 Field("question_text"),
                 Field("help_text"),
                 Field("answer_type"),
+                Div(
+                    Field("widget"),
+                    Field("min_value"),
+                    Field("max_value"),
+                    Field("step_size"),
+                    Field("interface"),
+                    id="conditional-fields",
+                ),
                 Fieldset(
                     "Add options",
                     Formset("options"),
@@ -284,7 +295,6 @@ class QuestionForm(SaveFormInitMixin, DynamicFormMixin, ModelForm):
                 Field("image_port"),
                 Field("direction"),
                 Field("order"),
-                Field("interface"),
                 Field("overlay_segments"),
                 Field("look_up_table"),
                 HTML("<br>"),
@@ -300,8 +310,57 @@ class QuestionForm(SaveFormInitMixin, DynamicFormMixin, ModelForm):
             kind__in=ANSWER_TYPE_TO_INTERFACE_KIND_MAP[answer_type]
         )
 
+    def widget_choices(self):
+        answer_type = self["answer_type"].value()
+
+        def choice(widget):
+            return (widget.value, widget.label)
+
+        if answer_type == AnswerType.TEXT:
+            return (
+                choice(WidgetChoices.SINGLE_LINE),
+                choice(WidgetChoices.MULTI_LINE),
+            )
+        elif answer_type == AnswerType.NUMBER:
+            return (
+                choice(WidgetChoices.SINGLE_LINE),
+                choice(WidgetChoices.SLIDER),
+            )
+        elif answer_type == AnswerType.CHOICE:
+            return (
+                choice(WidgetChoices.RADIO_BUTTONS),
+                choice(WidgetChoices.DROWPDOWN),
+            )
+        elif answer_type == AnswerType.MULTICHOICE:
+            return (
+                choice(WidgetChoices.CHECKBOXES),
+                choice(WidgetChoices.DROWPDOWN),
+            )
+        else:
+            return ()
+
     def initial_interface(self):
         return self.interface_choices().first()
+
+    def initial_widget(self):
+        return self.widget_choices()[0]
+
+    def show_widget_field(self):
+        return self["answer_type"].value() in [
+            AnswerType.TEXT,
+            AnswerType.NUMBER,
+            AnswerType.CHOICE,
+            AnswerType.MULTICHOICE,
+        ]
+
+    def show_step_size_field(self):
+        return (
+            self.show_widget_field()
+            and self["widget"].value() == WidgetChoices.SLIDER
+        )
+
+    def show_min_max(self):
+        return self["answer_type"].value() == AnswerType.NUMBER
 
     def clean(self):
         answer_type = self.cleaned_data.get("answer_type")
@@ -326,6 +385,19 @@ class QuestionForm(SaveFormInitMixin, DynamicFormMixin, ModelForm):
             )
         return super().clean()
 
+    def get_select(self):
+        return Select(
+            attrs={
+                "hx-get": (
+                    f"{reverse_lazy('reader-studies:question-form-fields')}?"
+                    f"answer_type={self['answer_type'].value()}"
+                ),
+                "hx-target": "#conditional-fields",
+                "hx-swap": "innerHTML",
+                "hx-attrs": ["answer_type"],
+            },
+        )
+
     def full_clean(self):
         """Override of the form's full_clean method.
 
@@ -345,6 +417,10 @@ class QuestionForm(SaveFormInitMixin, DynamicFormMixin, ModelForm):
             "question_text",
             "help_text",
             "answer_type",
+            "widget",
+            "min_value",
+            "max_value",
+            "step_size",
             "required",
             "image_port",
             "direction",
@@ -398,18 +474,60 @@ class QuestionForm(SaveFormInitMixin, DynamicFormMixin, ModelForm):
             "answer_type": Select(
                 attrs={
                     "hx-get": reverse_lazy(
-                        "reader-studies:question-interfaces"
+                        "reader-studies:question-form-fields"
                     ),
-                    "hx-target": "#id_interface",
+                    "hx-target": "#conditional-fields",
+                    "hx-swap": "innerHTML",
                 }
             ),
         }
+
+    # TODO: remove this once all questions have been migrated to new answer types
+    answer_type = ChoiceField(
+        choices=[
+            x
+            for x in AnswerType.choices
+            if x[0] not in ["STXT", "MTXT", "MCHO", "MCHD"]
+        ],
+        widget=Select(
+            attrs={
+                "hx-get": reverse_lazy("reader-studies:question-form-fields"),
+                "hx-target": "#conditional-fields",
+                "hx-swap": "innerHTML",
+            }
+        ),
+    )
 
     interface = DynamicField(
         ModelChoiceField,
         queryset=interface_choices,
         initial=initial_interface,
         required=False,
+    )
+
+    widget = DynamicField(
+        ChoiceField,
+        choices=widget_choices,
+        initial=initial_widget,
+        required=False,
+        widget=get_select,
+        include=show_widget_field,
+    )
+
+    step_size = DynamicField(
+        FloatField,
+        required=False,
+        include=show_step_size_field,
+    )
+    min_value = DynamicField(
+        FloatField,
+        required=False,
+        include=show_min_max,
+    )
+    max_value = DynamicField(
+        FloatField,
+        required=False,
+        include=show_min_max,
     )
 
 

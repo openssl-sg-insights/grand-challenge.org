@@ -915,12 +915,17 @@ class AnswerType(models.TextChoices):
     ANGLE = "ANGL", "Angle"
     MULTIPLE_ANGLES = "MANG", "Multiple angles"
 
+    # New types
+    TEXT = "TXT", "Text"
+    MULTICHOICE = "MCHC", "Multichoice"
+
     @staticmethod
     def get_choice_types():
         return [
             AnswerType.CHOICE,
             AnswerType.MULTIPLE_CHOICE,
             AnswerType.MULTIPLE_CHOICE_DROPDOWN,
+            AnswerType.MULTICHOICE,
         ]
 
     @staticmethod
@@ -940,6 +945,15 @@ class AnswerType(models.TextChoices):
             AnswerType.ANGLE,
             AnswerType.MULTIPLE_ANGLES,
         ]
+
+
+class WidgetChoices(models.TextChoices):
+    SINGLE_LINE = "SLINE", "Single line text"
+    MULTI_LINE = "MLINE", "Multi line text"
+    CHECKBOXES = "CHBOX", "Checkboxes"
+    DROWPDOWN = "DDOWN", "Dropdown"
+    RADIO_BUTTONS = "RADIO", "Radio buttons"
+    SLIDER = "SLIDE", "Slider"
 
 
 ANSWER_TYPE_TO_INTERFACE_KIND_MAP = {
@@ -977,6 +991,8 @@ ANSWER_TYPE_TO_INTERFACE_KIND_MAP = {
     ],
     AnswerType.ANGLE: [InterfaceKindChoices.ANGLE],
     AnswerType.MULTIPLE_ANGLES: [InterfaceKindChoices.MULTIPLE_ANGLES],
+    AnswerType.TEXT: [InterfaceKindChoices.STRING],
+    AnswerType.MULTICHOICE: [InterfaceKindChoices.MULTIPLE_CHOICE],
 }
 
 
@@ -1035,6 +1051,14 @@ class Question(UUIDModel, OverlaySegmentsMixin):
         choices=AnswerType.choices,
         default=AnswerType.SINGLE_LINE_TEXT,
     )
+    widget = models.CharField(
+        max_length=5,
+        choices=WidgetChoices.choices,
+        blank=True,
+    )
+    min_value = models.FloatField(null=True, blank=True)
+    max_value = models.FloatField(null=True, blank=True)
+    step_size = models.FloatField(default=1)
     # Set blank because the requirement is dependent on answer_type and handled in the front end
     image_port = models.CharField(
         max_length=14, choices=ImagePort.choices, blank=True, default=""

@@ -2,6 +2,7 @@ import csv
 import json
 import uuid
 
+from crispy_forms.templatetags.crispy_forms_filters import as_crispy_field
 from django.contrib import messages
 from django.contrib.admin.utils import NestedObjects
 from django.contrib.auth import get_user_model
@@ -1373,10 +1374,23 @@ class QuestionDelete(
         )
 
 
-class QuestionInterfacesView(View):
+class QuestionFormFieldsView(View):
     def get(self, request):
         form = QuestionForm(request.GET)
-        return HttpResponse(form["interface"])
+
+        fields = []
+        if form.show_widget_field():
+            fields.append("widget")
+        if form.show_min_max():
+            fields.append("min_value")
+            fields.append("max_value")
+        if form.show_step_size_field():
+            fields.append("step_size")
+        fields.append("interface")
+
+        return HttpResponse(
+            "\n".join(as_crispy_field(form[field]) for field in fields)
+        )
 
 
 class DisplaySetDetail(
